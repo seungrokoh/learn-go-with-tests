@@ -107,3 +107,90 @@ func main() {
     fmt.Println(Hello("Chris"))
 }
 ```
+
+***
+### 테스트 케이스 추가하기
+새로운 테스트 케이스로 `Hello()` 함수의 인자값으로 `empty_string`이 왔을 때 `Hello, `가 아닌 `Hello, World`를 출력하도록 변경해보자.
+
+:heavy_check_mark: hello_test.go 수정
+
+```go
+package main
+
+import "testing"
+
+func TestHello(t *testing.T) {
+    t.Run("saying hello to people", func (t *testing.T) {
+        got := Hello("Chris")
+        want := "Hello, Chris"
+
+        if got != want {
+            t.Errorf("got %q want %q", got, want)
+        }
+    })
+
+    t.Run("say 'Hello, World' when an empty string in supplied", func (t *testing.T) {
+        got := Hello("")
+        want := "Hello, World"
+
+        if got != want {
+            t.Errorf("got %q want %q", got, want)
+        }
+    })
+}
+```
+위와 같이 테스트 코드를 수정한 뒤 `go test`를 진행해보면 `Error`가 뜬다. **RED** 상황이 발생했으므로 동작할 수 있도록 `hello.go`파일을 수정해보자.
+
+:heavy_check_mark: hello.go 수정
+```go
+package main
+
+import "fmt"
+
+const englishHelloPrefix = "Hello, "
+
+func Hello(name string) string {
+    if name == "" {
+        name = "World"
+    }
+    return englishHelloPrefix + name
+}
+```
+단순하게 `empty_string`이 들어왔을 경우 기대값인 `World`로 변경하여 출력하도록 수정하였다. 이로써 **GREEN** 상황을 만들었으므로 **REFACTOR** 를 진행해보자
+
+위의 `hello_test.go`파일에서 **에러를 출력하는 부분의 코드가 중복** 되는걸 볼 수 있다. 중복되는 부분을 제거하면서 `Refactoring`을 진행해보자.
+
+:heavy_check_mark: hello_test.go 수정
+
+```go
+package main
+
+import "testing"
+
+func TestHello(t *testing.T) {
+
+    assertCorrectMessage := func(t *testing.T, got, want string) {
+        t.Helper()
+        if got != want {
+            t.Errorf("got %q want %q", got, want)
+        }
+    }
+
+    t.Run("saying hello to people", func (t *testing.T) {
+        got := Hello("Chris")
+        want := "Hello, Chris"
+
+        assertCorrectMessage(t, got, want)
+    })
+
+    t.Run("say 'Hello, World' when an empty string in supplied", func (t *testing.T) {
+        got := Hello("")
+        want := "Hello, World"
+
+        assertCorrectMessage(t, got, want)
+    })
+}
+```
+에러 출력하는 부분을 함수화 시켜서 중복되는 코드는 줄였다. 여기서 `t.Helper()`라는 함수를 호출해주는데 `t.Helper()`를 호출해주는 이유는 **해당 메소드가 Helper임을 나타내며 오류가 발생했을 때 해당 함수가 호출된 곳의 `line number`를 알려주도록 하기 위함이다.**
+
+***
