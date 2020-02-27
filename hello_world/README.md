@@ -49,3 +49,61 @@ func TestHello(t *testing.T) {
 `got`은 Test할 함수가 반환하는 값이며, `want`는 기대값을 나타낸다. 이에 위 코드는 Test값과 기대값이 다를 때 `에러를 반환`하는 코드이다.
 
 테스트를 진행하고 싶다면 `go test` 명령어를 입력하면 된다.
+
+***
+### 함수 인자 추가하기
+위에서 작성한 함수를 이름을 입력받아 출력하는 형식으로 바꿔보면서 TDD를 진행해보자
+
+첫 번째로 `hello_test.go` 파일에서 Test함수를 변경해보자
+
+:heavy_check_mark: hello_test.go 수정
+```go
+package main
+
+import "testing"
+
+func TestHello(t *testing.T) {
+    got := Hello("Chris")
+    want := "Hello, Chris"
+
+    if got != want {
+        t.Errorf("got %q want %q", got, want)
+    }
+}
+```
+위와 같이 `hello_test.go` 파일을 수정하고 `go test`를 진행하면 `Error`가 뜬다. 이 상황을 **RED** 라고 한다. 이제 실제 함수를 변경해보자
+
+:heavy_check_mark: hello.go 수정
+```go
+package main
+
+import "fmt"
+
+func Hello(name string) string {
+    return "Hello, " + name
+}
+
+func main() {
+    fmt.Println(Hello("Chris"))
+}
+```
+실제 함수를 변경해서 해당 Test가 `PASS` 하도록 변경할 수 있다. 이 상황을 **GREEN** 이라고 한다. TDD 프로세스에 따르면 이제 `Refactor`를 진행하면 된다.
+
+`리팩토링`은 `"Hello, "` 부분을 상수로 변경해보자.
+
+:heavy_check_mark: hello.go 리팩토링
+```go
+package main
+
+import "fmt"
+
+const englishHelloPrefix = "Hello, "
+
+func Hello(name string) string {
+    return englishHelloPrefix + name
+}
+
+func main() {
+    fmt.Println(Hello("Chris"))
+}
+```
