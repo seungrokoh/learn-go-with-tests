@@ -194,3 +194,91 @@ func TestHello(t *testing.T) {
 에러 출력하는 부분을 함수화 시켜서 중복되는 코드는 줄였다. 여기서 `t.Helper()`라는 함수를 호출해주는데 `t.Helper()`를 호출해주는 이유는 **해당 메소드가 Helper임을 나타내며 오류가 발생했을 때 해당 함수가 호출된 곳의 `line number`를 알려주도록 하기 위함이다.**
 
 ***
+### 언어별 내용 출력하기
+위 함수에서 언어별 인사말을 다르게 출력하고 싶어서 해당 내용을 테스트 케이스에 추가한다고 가정하자. 먼저 `english, Spanish, French` 언어에 따라 인사말이 달라질 수 있도록 `hello_test.go`의 함수를 수정해보자.
+
+:heavy_check_mark: hello_test.go 수정
+```go
+// ...
+func TestHello(t *testing.T) {
+    // ...
+    t.Run("in Spanish", func(t *testing.T) {
+        got := Hello("Elodie", "Spanish")
+        want := "Hola, Elodie"
+        assertCorrectMessage(t, got, want)
+    })
+}
+```
+위와 같이 함수 내용을 변경하고 `go test`를 실행하면 `Error`가 발생한다. 이제 **RED** 상황이 나왔으므로 `PASS`할 수 있도록 코드를 수정한다.
+
+:heavy_check_mark: hello.go 수정
+```go
+const spanish = "Spanish"
+const french = "French"
+
+const englishHelloPrefix = "Hello, "
+const spanishHelloPrefix = "Hola, "
+const frenchHelloPrefix = "Bonjour, "
+// ...
+func Hello(name string, language string) string {
+    if name == "" {
+        name = "World"
+    }
+
+    if language == spanish {
+        return spanishHelloPrefix + name
+    }
+
+    if language == french {
+        return frenchHelloPrefix + name
+    }
+
+    return englishHelloPrefix + name
+}
+```
+위와 같이 함수를 변경하면 테스트에 통과한다. **GREEN** 상황을 만들었으니 **REFACTOR** 를 진행한다. 언어가 추가될 수 있으므로 **가독성을 높이기 위해** `if`문을 `switch`로 변경해준다.
+
+:heavy_check_mark: hello.go 리팩토링
+```go
+//...
+func Hello(name string, language string) string {
+    if name == "" {
+        name = "World"
+    }
+
+    prefix := englishHelloPrefix
+
+    switch language {
+    case spanish:
+        prefix := spanishHelloPrefix
+    case french:
+        prefix := frenchHelloPrefix
+    }
+    return prefix + name
+}
+```
+여기서 조금 더 `Refactoring`을 진행한다면 `Hello()` 함수의 기능이 점점 많아 지는 것을 고려해 **각 기능별로 함수를 세분화 시키는 것이다.**
+
+:heavy_check_mark: hello.go 추가 리팩토링
+```go
+//...
+func Hello(name string, language string) string {
+    if name == "" {
+        name = "World"
+    }
+
+    return greetingPrefix(language) + name
+}
+
+func greetingPrefix(language string) (prefix string) {
+    switch language {
+    case spanish:
+        prefix = spanishHelloPrefix
+    case french:
+        prefix = frenchHelloPrefix
+    default:
+        prefix = englishHelloPrefix
+    }
+    return
+}
+```
