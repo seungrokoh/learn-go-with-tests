@@ -53,3 +53,46 @@ func Repeat(character string) string {
     return repeated
 }
 ```
+
+### Benchmarking
+
+Go 언어에서 `Benchmarking`은 또 다른 일급 기능? 이며 테스트를 작성하는 것과 매우 유사하다. `Benchmarking` 함수 작성 form은 다음과 같다.
+
+:heavy_check_mark: Benchmarking 함수 작성 form
+[golang.org [Benchmarks]](https://golang.org/pkg/testing/#hdr-Benchmarks)
+```go
+func BenchmarkXxx(*testing.B)
+```
+`Repeat()` 함수의 `Benchmark`를 작성해보자.
+
+:heavy_check_mark: repeat_test.go Benchmark 작성
+```go
+package iteration
+
+// ...
+
+func BenchmarkRepeat(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        Repeat("a")
+    }
+}
+```
+`Benchmark` 코드를 작성하는 것은 `Test` 코드를 작성하는 것과 매우 유사하다.  
+
+`testing.B`를 통해 `b.N`에 접근할 수 있다. `Benchmark` 코드가 실행되면 `b.N`회 만큼 반복하며 시간이 얼마나 걸리는지 측정한다.
+
+`Benchmark`를 실행 시키기 위해서 `Terminal`에 다음 명령어를 입력하면 된다.
+
+:heavy_check_mark: 벤치마크 실행 명령어
+```
+$ go test -bench=.
+```
+
+```
+goos: linux
+goarch: amd64
+pkg: GoTourPractice/iteration
+BenchmarkRepeat-8        6852670               155 ns/op
+PASS
+```
+위의 결과값에서 `6852670`    `155 ns/op`의 의미는 해당 기능이 평균 `155 nano second` 동안 실행된다는 의미이며 테스트 하기위해 6852670번 실행 했다는 의미이다.
