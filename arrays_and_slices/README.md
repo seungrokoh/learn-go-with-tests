@@ -203,3 +203,89 @@ func SumAll(numbersToSum... []int) []int {
 }
 ```
 위와 같은 코드로 변경시 `capacity`는 고려하지 않아도 된다.
+
+### 요구사항 추가
+위에서 구현한 `SumAll()` 함수를 `SumAllTails()` 함수로 변경해보자.  
+`SumAllTails()` 함수는 첫 번째 원소를 제외한 나머지 원소들의 합을 구하는 함수이다.
+
+:heavy_check_mark: sum_test.go 수정
+```go
+package main
+
+import "testing"
+
+func TestSumAllTails(t *testing.T) {
+    got := SumAllTails([]int{1, 2}, []int{0, 9})
+    want := []int{2, 9}
+
+    if got != want {
+        t.Errorf("got %v want %v", got, want)
+    }
+}
+```
+이제 SumAllTails 테스트가 통과할 수 있도록 `SumAll()` 함수를 `SumAllTails()`로 번경해보자.
+
+:heavy_check_mark: sum.go 수정
+```go
+package main
+
+func SumAllTails(numbersToSum... []int) []int {
+    var sums []int
+    for _, numbers := range numbersToSum {
+        tail := numbers[1:]
+        sums = append(sums, Sum(tail))
+    }
+    return sums
+}
+```
+입력받은 `Slice`에서 `Slicing`을 이용해 첫 번째 원소를 제외한 `Slice`를 만들고 `Sum` 함수를 이용해 전체 합을 구하도록 변경하였다.
+
+**하지만,** 과연 이 코드에 문제가 없을지 잘 생각해보자.
+
+### Refactoring
+위의 코드는 전혀 문제 없는 것 처럼 보이지만 **문제점이 있다.** 만약 `빈 슬라이스`를 `SumAllTails()` 함수에 넣는다면 어떻게 되는지 확인해보자.
+
+오류가 발생하는 것을 볼 수 있다. 여기서 주의해야 할 점은 `컴파일 오류`가 아닌 `런타임 오류`라는 것이다. `런타임 오류`는 사용자에게 직접적인 영향을 줄 수 있으므로 주의해야 한다. 이제 이 문제를 해결하기 위해 코드를 `REFACTOR` 해보자.
+
+:heavy_check_mark: sum.go 수정
+```go
+package main
+
+func SumAllTails(numbersToSum... []int) []int {
+    var sums []int
+    for _, numbers := range numbersToSum {
+        if len(numbers) == 0 {
+            sums = append(sums, 0)
+        } else {
+            tail := numbers[1:]
+            sums = append(sums, Sum(tail))
+        }
+    }
+    return sums
+}
+```
+추가적으로 여러 테스트를 작성할 때 반복되는 `assertion code`를 제거하기 위해 `REFACTOR`를 진행해보자.
+
+:heavy_check_mark: func TestSumAllTails() 수정
+```go
+func TestSumAllTails(t *testing.T) {
+	checkSum := func(t *testing.T, got, want []int) {
+		t.Helper()
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %v want %v", got, want)
+		}
+	}
+	t.Run("make the sums of tails of", func(t *testing.T) {
+		got := SumAllTails([]int{1, 2}, []int{0, 9})
+		want := []int{2, 9}
+		checkSum(t, got, want)
+	})
+
+	t.Run("safely sum empty slices", func(t *testing.T) {
+		got := SumAllTails([]int{}, []int{0, 9})
+		want := []int{0, 9}
+		checkSum(t, got, want)
+	})
+}
+```
+위와 같이 `checkSum(t, got, want)`로 `assertion code`를 따로 분리하였다. 이렇게 분리함으로써 `코드의 중복`을 줄임과 동시에 `type safe`한 코드를 작성할 수 있다. `want := "dave"`로 수정한 뒤 테스트를 진행해보자.
