@@ -112,3 +112,162 @@ func Area(rectangle Rectangle) float64 {
     return rectangle.Width * rectangle.Height
 }
 ```
+
+## **Add Circle Area**
+새로운 요구사항을 추가해보자. 기존에 있던 `Area()` 함수에 `Circle`의 넓이를 구하기를 추가하는 것이다. `shapes_test.go` 파일에 `Circle`의 넓이를 구하는 테스트를 추가해보자.
+
+:heavy_check_mark: shapes_test.go 수정
+```go
+package structs_methods_and_interfaces
+
+import "testing"
+
+func TestArea(t *testing.T) {
+	t.Run("rectangles", func(t *testing.T) {
+		rectangle := Rectangle{12.0, 6.0}
+		got := Area(rectangle)
+		want := 72.0
+
+		if got != want {
+			t.Errorf("got %.2f want %.2f", got, want)
+		}
+	})
+
+	t.Run("circles", func(t *testing.T) {
+		circle := Circle{10}
+		got := Area(circle)
+		want := 314.1592653589793
+
+		if got != want {
+			t.Errorf("got %.2f want %.2f", got, want)
+		}
+	})
+}
+```
+
+:heavy_check_mark: shape.go 수정
+```go
+type Circle struct {
+    radius float64
+}
+```
+이제 `Circle` struct에 대해서 `Area()` 함수를 생성하기 위해 `func Area(circle Circle) float64`를 선언해보자. 에러가 발생 할 것이다. **Go 언어에서는 다른 언어에서 제공하는 오버로딩 (Overloading)을 제공하지 않는다.** 이 문제를 해결하기 위해 2가지 방법이 존재한다.
+
+1. 새로운 패키지를 만들고 그 패키지 안에 `Area(Circle)` 함수를 생성한다.
+2. `메서드(methods)`를 정의한다.
+
+`메서드(methods)`는 `함수(Functions)`와 매우 비슷하지만 `메서드`는 특정 유형의 인스턴스에서 호출됩니다.
+
+각 도형 `Rectangle`, `Circle`에 대한 `Area()` 메서드를 정의하고 테스트 코드를 수정해보자.
+
+:heavy_check_mark: 메서드 정의
+```go
+type Rectangle struct {
+    Width float64
+    Height float64
+}
+
+func (r Rectangle) Area() float64 {
+    return r.Width * r.Height
+}
+
+type Circle struct {
+    Radius float64
+}
+
+func (c Circle) Area() float64 {
+    return math.Pi * c.Radius * c.Radius
+}
+```
+`메서드`를 작성하는 방법은 함수를 작성하는 것과 비슷하지만 **func 키워드와 함수명 사이에 Receiver가 들어가는 것이 다르다.** 작성하는 형식은 아래와 같다.
+
+```go
+func (receiverName receiverType) MethodName(args)
+```
+다른 프로그래밍 언어에서는 리시버에 접근할 때 `this` 키워드를 사용한다. **Go 에서 ReceiverName을 정하는 `Convention`은 Type의 첫 번째 letter로 되도록 하는 규칙이다.**
+
+이제 테스트 코드를 수정해보자.
+
+:heavy_check_mark: shapes_test.go 수정
+```go
+func TestArea(t *testing.T) {
+	t.Run("rectangles", func(t *testing.T) {
+		rectangle := Rectangle{12.0, 6.0}
+		got := rectangle.Area()
+		want := 72.0
+
+		if got != want {
+			t.Errorf("got %.2f want %.2f", got, want)
+		}
+	})
+
+	t.Run("circles", func(t *testing.T) {
+		circle := Circle{10}
+		got := circle.Area()
+		want := 314.1592653589793
+
+		if got != want {
+			t.Errorf("got %.2f want %.2f", got, want)
+		}
+	})
+}
+```
+
+## Refactor
+위에서 작성한 함수에서 중복되는 부분을 `Refactor` 해보자.
+
+도형을 생성한 다음 `Area()`를 호출하고 `Error`를 확인하는 부분의 `코드 중복`을 제거해보자. `checkArea()` 함수를 만들고 해당 함수에 도형을 넘겨주면 `checkArea()` 함수 안에서 각 도형에 대한 `Area()`를 호출하면 된다. **하지만 `Rectangle`과 `Circle`은 서로 다른 타입이기 때문에 `checkArea()` 함수에 같이 넘길 수 없다.** 이러한 문제점을 해결할 수 있는 방법이 `interfaces`를 사용하는 것이다.
+
+:bulb: Interfaces  
+
+`Interfaces` are a very powerful concept in statically typed languages like Go because they allow you to make functions that can be used with different types and create highly-decoupled code whilst still maintaining type-safety.
+
+이제 `shapes_test.go` 파일을 `Refactor` 해보자.
+
+:heavy_check_mark: refactoring shapes_test.go
+```go
+func TestArea(t *testing.T) {
+	checkArea := func(t *testing.T, shape Shape, want float64) {
+		t.Helper()
+		got := shape.Area()
+		if got != want {
+			t.Errorf("got %.2f want %.2f", got, want)
+		}
+	}
+	t.Run("rectangles", func(t *testing.T) {
+		rectangle := Rectangle{12.0, 6.0}
+		checkArea(t, rectangle, 72.0)
+	})
+
+	t.Run("circles", func(t *testing.T) {
+		circle := Circle{10}
+		checkArea(t, circle, 314.1592653589793)
+	})
+}
+```
+이제 도형의 `Area()` 메서드를 가진 `interface`를 선언한다.
+
+:heavy_check_mark: interface 선언 in shape.go
+```go
+// Something....
+
+type Shape interface {
+    Area() float64
+}
+```
+위와 같이 코드를 `Refactoring` 하면 테스트 코드는 `PASS` 할 것이다. 여기서 궁금한 점은 **어떻게 Shape Interface로 정의가 되는가?** 인데. 다른 언어에서 제공하는 `Interface`와는 조금 다르다.
+
+다른 언어에서 제공하는 `Interface`는 `명시적`으로 구현한다. 예를 들어 아래와 같다.
+
+
+- My type Foo implement interface Bar
+
+
+하지만 **Go 언어에서 `Interface`는 `암시적`으로 구현한다.**
+
+- `Rectangle`은 `float64`를 반환하는 `Area()` 메서드를 가지고 있어 `Shape` Interface를 만족한다.
+- `Circle`은 `float64`를 반환하는 `Area()` 메서드를 가지고 있어 `Shape` Interface를 만족한다.
+- `string`은 `float64`를 반환하는 `Area()` 메서드를 가지고 있지 않아 `Shape` Interface를 만족하지 않는다.
+
+:bulb: **Decoupling**  
+인터페이스를 선언함으로써 헬퍼는 구체적인 유형에서 분리(사각형, 삼각형, 원형인지 알 필요가 없음)되고 작업을 수행하는 데 필요한 방법만 알면 된다.
