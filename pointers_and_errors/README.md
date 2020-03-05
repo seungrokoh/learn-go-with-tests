@@ -243,3 +243,208 @@ func (w *Wallet) WithDraw(amount Bitcoin) error {
 }
 ```
 `errors.New(string)`은 메세지를 포함한 새로운 `error`를 생성한다.
+
+## Refactor
+이제 테스트 오류를 명확하게 표시하기 위해 `Test error Helper`를 작성해보자. 오류가 발생하면 `오류 메세지`를 표시할 수 있도록 `Refactoring`을 진행한다.
+
+:heavy_check_mark: wallet_test.go 수정
+```go
+// in wallet_test.go
+
+// Something ...
+
+assertError := func(t *testing.T, got error, want string) {
+    t.Helper()
+    if got == nil {
+        t.Fatal("didn't get an error but wanted one")
+    }
+    if got.Error() != want {
+        t.Errorf("got %q, want %q", got, want)
+    }
+}
+
+// Something ...
+
+t.Run("Withdraw insufficient funds", func(t *testing.T) {
+    startingBalance := Bitcoin(20)
+    wallet := Wallet{startingBalance}
+    err := wallet.WithDraw(Bitcoin(100))
+
+    assertBalance(t, wallet, startingBalance)
+    assertError(t, err, "cannot withdraw, insufficient funds")
+})
+```
+`t.Fatal(string)`의 역할은 **로그를 출력한 뒤 해당 테스트를 즉시 중단하고 다음 테스트를 진행시키는 역할** 을 한다.
+
+:heavy_check_mark: wallet.go 수정
+```go
+// in wallet.go
+
+// Something ...
+
+func (w *Wallet) WithDraw(amount Bitcoin) error {
+	if w.balance < amount {
+		return errors.New("cannot withdraw, insufficient funds")
+	}
+	w.balance -= amount
+	return nil
+}
+```
+
+## Refactor
+테스트코드와 `WithDraw` 에서 중복되는 에러 코드를 수정해보자. Go 언어에서 `error`는 변수이므로 따로 뺄 수 있다.
+
+중복되는 `error`를 변수로 따로 빼고, `assertion` 함수들도 따로 분리해보자.
+
+:heavy_check_mark: wallet.go 수정
+```go
+package pointers_and_errors
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrInsufficientFunds = errors.New("cannot withdraw, insufficient funds")
+
+type Bitcoin int
+
+type Wallet struct {
+	balance Bitcoin
+}
+
+func (w *Wallet) Deposit(amount Bitcoin) {
+	w.balance += amount
+}
+
+func (w *Wallet) Balance() Bitcoin {
+	return w.balance
+}
+
+func (w *Wallet) WithDraw(amount Bitcoin) error {
+	if w.balance < amount {
+		return ErrInsufficientFunds
+	}
+	w.balance -= amount
+	return nil
+}
+
+func (b Bitcoin) String() string {
+	return fmt.Sprintf("%d BTC", b)
+}
+```
+
+:heavy_check_mark: wallet_test.go
+```go
+package pointers_and_errors
+
+import (
+	"testing"
+)
+
+func TestWallet(t *testing.T) {
+	t.Run("Deposit", func(t *testing.T) {
+		wallet := Wallet{}
+		wallet.Deposit(Bitcoin(10))
+		assertBalance(t, wallet, Bitcoin(10))
+	})
+
+	t.Run("WithDraw", func(t *testing.T) {
+		wallet := Wallet{balance: Bitcoin(20)}
+		wallet.WithDraw(Bitcoin(10))
+		assertBalance(t, wallet, Bitcoin(10))
+	})
+
+	t.Run("Withdraw insufficient funds", func(t *testing.T) {
+		startingBalance := Bitcoin(20)
+		wallet := Wallet{startingBalance}
+		err := wallet.WithDraw(Bitcoin(100	))
+
+		assertBalance(t, wallet, startingBalance)
+		assertError(t, err, ErrInsufficientFunds)
+	})
+}
+
+func assertBalance(t *testing.T, wallet Wallet, want Bitcoin) {
+	t.Helper()
+	got := wallet.Balance()
+
+	if got != want {
+		t.Errorf("got %s want %s", got, want)
+	}
+}
+
+func assertError(t *testing.T, got error, want error) {
+	t.Helper()
+	if got == nil {
+		t.Fatal("didn't get an error but wanted one")
+	}
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+```
+
+## Unchecked errors
+Go 컴파일러가 에러를 처리하는데 많은 도움을 주지만 놓칠 수 있는 부분이 있다. 이러한 문제를 확인하기 위해 `errcheck` 를 사용한다. `errcheck`를 사용하면 **반환 된 오류를 확인하지 않은 부분을 알려준다.** 이 문제를 해결하기 위해 코드를 조금 수정해보자.
+
+에러가 없을 경우를 체크하는 `assertNoError` 함수를 작성해보자.
+
+:heavy_check_mark: wallet_test.go 수정
+```go
+package pointers_and_errors
+
+import (
+	"testing"
+)
+
+func TestWallet(t *testing.T) {
+	t.Run("Deposit", func(t *testing.T) {
+		wallet := Wallet{}
+		wallet.Deposit(Bitcoin(10))
+		assertBalance(t, wallet, Bitcoin(10))
+	})
+
+	t.Run("WithDraw", func(t *testing.T) {
+		wallet := Wallet{balance: Bitcoin(20)}
+		err := wallet.WithDraw(Bitcoin(10))
+		assertBalance(t, wallet, Bitcoin(10))
+		assertNoError(t, err)
+	})
+
+	t.Run("Withdraw insufficient funds", func(t *testing.T) {
+		startingBalance := Bitcoin(20)
+		wallet := Wallet{startingBalance}
+		err := wallet.WithDraw(Bitcoin(100	))
+
+		assertBalance(t, wallet, startingBalance)
+		assertError(t, err, ErrInsufficientFunds)
+	})
+}
+
+func assertBalance(t *testing.T, wallet Wallet, want Bitcoin) {
+	t.Helper()
+	got := wallet.Balance()
+
+	if got != want {
+		t.Errorf("got %s want %s", got, want)
+	}
+}
+
+func assertNoError(t *testing.T, got error) {
+	t.Helper()
+	if got != nil {
+		t.Fatal("got an error but didn't want one")
+	}
+}
+
+func assertError(t *testing.T, got error, want error) {
+	t.Helper()
+	if got == nil {
+		t.Fatal("didn't get an error but wanted one")
+	}
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+```
