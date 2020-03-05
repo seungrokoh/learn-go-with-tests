@@ -117,3 +117,129 @@ if got != want {
     t.Errorf("got %s want %s", got, want)
 }
 ```
+
+## WithDraw 기능 추가
+이제 `Bitcoin`을 인출하는 `WithDraw` 함수를 추가로 작성해보자. 먼저 테스트 코드를 작성하고 통과할 수 있는 최소한의 코드를 작성해보자.
+
+:heavy_check_mark: wallet_test.go
+```go
+package pointers_and_errors
+
+import (
+	"testing"
+)
+
+func TestWallet(t *testing.T) {
+
+	t.Run("Deposit", func(t *testing.T) {
+		wallet := Wallet{}
+		wallet.Deposit(Bitcoin(10))
+
+		got := wallet.Balance()
+		want := Bitcoin(10)
+
+		if got != want {
+			t.Errorf("got %s want %s", got, want)
+		}
+	})
+
+	t.Run("WithDraw", func(t *testing.T) {
+		wallet := Wallet{balance: Bitcoin(20)}
+		wallet.WithDraw(Bitcoin(10))
+
+		got := wallet.Balance()
+		want := Bitcoin(10)
+
+		if got != want {
+			t.Errorf("got %s want %s", got, want)
+		}
+	})
+}
+```
+
+:heavy_check_mark: wallet.go
+```go
+// in wallet.go
+
+// Something ...
+
+// add WithDraw method
+func (w *Wallet) WithDraw(amount Bitcoin) {
+	w. balance -= amount
+}
+```
+
+## Refactor
+테스트 코드에서 중복되는 코드를 수정해보자.
+
+:heavy_check_mark: wallet_test.go
+```go
+package pointers_and_errors
+
+import (
+	"testing"
+)
+
+func TestWallet(t *testing.T) {
+
+	assertBalance := func(t *testing.T, wallet Wallet, want Bitcoin) {
+		t.Helper()
+		got := wallet.Balance()
+
+		if got != want {
+			t.Errorf("got %s want %s", got, want)
+		}
+	}
+
+	t.Run("Deposit", func(t *testing.T) {
+		wallet := Wallet{}
+		wallet.Deposit(Bitcoin(10))
+		assertBalance(t, wallet, Bitcoin(10))
+	})
+
+	t.Run("WithDraw", func(t *testing.T) {
+		wallet := Wallet{balance: Bitcoin(20)}
+		wallet.WithDraw(Bitcoin(10))
+		assertBalance(t, wallet, Bitcoin(10))
+	})
+}
+```
+assertBalance 함수를 새로 생성하여 중복되는 코드를 제거할 수 있다. 여기서 문제점을 한 번 살펴보자. 만약 **`Wallet`에 남은 `Bitcoin`보다 더 많은 양의 `Bitcoin`을 인출하려 하면** 어떻게 될까?
+
+예제에서 `초과 인출`은 없다고 가정하자. 초과 인출을 했을 때 알 수 있도록 코드를 수정해보자. Go 언어에서 오류를 표시하고 처리하  위해서 함수가 `err`을 반환하여 처리할 수 있도록 하는게 일반적인 방법이다. `wallet_test.go`에 새로운 테스트 코드를 작성하고 `WithDraw` 메서드를 수정해보자.
+
+:heavy_check_mark: wallet_test.go 수정
+```go
+// in wallet_test.go
+
+// Something ...
+
+// add Test code
+t.Run("Withdraw insufficient funds", func(t *testing.T) {
+    startingBalance := Bitcoin(20)
+    wallet := Wallet{startingBalance}
+    err := wallet.WithDraw(Bitcoin(100))
+    assertBalance(t, wallet, startingBalance)
+
+    if err == nil {
+        t.Error("wanted an error but didn't get one")
+    }
+})
+```
+
+:heavy_check_mark: wallet.go 수정
+```go
+// in wallet.go
+
+// Something ...
+
+// modify WithDraw
+func (w *Wallet) WithDraw(amount Bitcoin) error {
+	if w.balance < amount {
+		return errors.New("oh no")
+	}
+	w.balance -= amount
+	return nil
+}
+```
+`errors.New(string)`은 메세지를 포함한 새로운 `error`를 생성한다.
