@@ -271,3 +271,119 @@ type Shape interface {
 
 :bulb: **Decoupling**  
 인터페이스를 선언함으로써 헬퍼는 구체적인 유형에서 분리(사각형, 삼각형, 원형인지 알 필요가 없음)되고 작업을 수행하는 데 필요한 방법만 알면 된다.
+
+### Table Driven Test
+
+[Table Driven Test](https://github.com/golang/go/wiki/TableDrivenTests)를 진행해보자. `Table driven test`는 동일한 방식으로 테스트할 수 있는 테스트 목록을 테스트할 때 유용하다.
+
+`Table driven test`를 진행하기 위해 `익명 구조체 슬라이스`를 생성해보자. 해당 구조체는 도형을 나타내는 `Shape`와 테스트를 통과하는 기준인 `want` Field를 가지고 있다.
+
+:heavy_check_mark: func TestArea() 수정
+```go
+func TestArea(t *testing.T) {
+
+    areaTests := []struct {
+        shape Shape
+        want float64
+    } {
+        {Rectangle{12, 6}, 72.0},
+        {Circle{10}, 314.1592653589793},
+    }
+
+    for _, tt := range areaTests {
+        got := tt.shape.Area()
+        if got != want {
+            t.Errorf("got %.2f want %.2f", got, tt.want)
+        }
+    }
+}
+```
+이제 새로운 도형인 `Triangle`을 작성하고 테스트 케이스에 추가해보자.
+
+:heavy_check_mark: shape_test.go 수정
+```go
+func TestArea(t *testing.T) {
+
+    areaTests := []struct {
+        shape Shape
+        want float64
+    } {
+        {Rectangle{12, 6}, 72.0},
+        {Circle{10}, 314.1592653589793},
+        {Triangle{12, 6}, 36.0}
+    }
+
+    for _, tt := range areaTests {
+        got := tt.shape.Area()
+        if got != want {
+            t.Errorf("got %.2f want %.2f", got, tt.want)
+        }
+    }
+}
+```
+새로운 테스트 케이스를 추가하는게 엄청 쉽다. 이제 테스트 코드가 동작하 수 있도록 `Triangle` 구조체를 선언하자.
+
+:heavy_check_mark: Triangle 구조체 선언
+```go
+type Triangle struct {
+    Base float64
+    Height float64
+}
+```
+하지만 `Triangle` 구조체를 선언하는 것으로 끝나는 것이 아니다. 테스트 코드를 통과하기 위해선 `Triangle`이 `Shape`를 만족해야 하기 때문이다. 따라서 `Triangle`에 `Area()` 함수를 추가해준다.
+
+:heavy_check_mark: Area() 추가
+```go
+func (t Triangle) Area() float64 {
+    return (t.Base * t.Height) * 0.5
+}
+```
+
+## Refactor
+위 코드는 테스트를 통과하고 `Table driven test`를 진행하는데 전혀 무리가 없다. 하지만 가독성을 위해서 아래와 같은 코드를 살펴보자.
+
+`areaTests []struct`를 선언하는 곳의 일부분이다.
+```go
+{Rectangle{12, 6}, 72.0},
+{Circle{10}, 314.1592653589793},
+{Triangle{12, 6}, 36.0}
+```
+구조체를 선언할 때 각 Field가 무엇을 나타내는지 선언했지만 위와 같이 테스트 케이스를 추가할 때 어떤 역할을 하는지 구분하기가 힘들다. 여기서 가독성을 더 좋게 하기 위해 field name 을 앞에 붙여줄 수 있다.
+
+```go
+{shape: Rectangle{12, 6}, want: 72.0},
+{shape: Circle{10}, want: 314.1592653589793},
+{shape: Triangle{12, 6}, want: 36.0},
+```
+
+또 다른 가독성을 높이는 방법이 있다. `Triangle` 테스트를 처음 추가하고 test를 실행했을 때 출력 된 `error message`를 보자.
+```go
+shapes_test.go:31: got 0.00 want 36.00
+```
+문제될 건 없지만 만약 테스트가 3개가 아니고 100만개가 있다고 가정 ~~(오버해서)~~ 해보자. 어떤 테스트 케이스가 조건을 만족하지 않는지 알기가 힘들다. 물론 `line number`를 알려주고 있긴 하지만 그것만 보기에는 힘들다. 개발자가 이해하기 더 쉽게 만들기 위해 test case 에 이름을 붙여보고 이를 `error message`에 출력해보자.
+
+:heavy_check_mark: func TestArea() 수정
+```go
+func TestArea(t *testing.T) {
+	areaTests := []struct {
+		name string
+		shape Shape
+		hasArea float64
+	} {
+		{name: "Rectangle", shape:Rectangle{12, 6}, hasArea: 72.0},
+		{name: "Circle", shape: Circle{10}, hasArea: 314.1592653589793},
+		{name: "Triangle", shape: Triangle{12, 6}, hasArea: 36.0},
+	}
+
+	for _, tt := range areaTests {
+		// Using tt.name from the case to use it as the `t.Run` test name
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.shape.Area()
+			if got != tt.hasArea {
+				t.Errorf("%#v got %.2f want %.2f", tt.shape, got, tt.hasArea)
+			}
+		})
+	}
+}
+```
+`Table driven test`를 사용하면 `t.Run`을 사용하여 테스트 케이스를 확인해볼 수 있다.
