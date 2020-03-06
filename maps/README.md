@@ -318,3 +318,87 @@ func (d Dictionary) Add(word, definition string) error {
 	return nil
 }
 ```
+
+## Refactor
+Error를 사용하는 곳이 많아짐에 따라 Error를 재사용 가능하게 `Refactoring` 해보자. 먼저 `Custom type`으로 `DictionaryErr`를 만들고 `error interface`를 구현하게 만든다.
+
+그 다음 단어의 뜻을 수정할 수 있는 `Update` 메서드를 만들어보자.
+
+* Dictionary에 이미 `word`가 존재한다면 새로운 `Definition`으로 변경한다.
+* Dictionary에 `word`가 존재하지 않는다면 존재하지 않는다는 에러를 발생시킨다.
+
+:heavy_check_mark: dictionary_test.go
+```go
+func TestUpdate(t *testing.T) {
+	t.Run("existing word", func(t *testing.T) {
+		word := "test"
+		definition := "this is just a test"
+		newDefinition := "new definition"
+		dictionary := Dictionary{word: definition}
+
+		err := dictionary.Update(word, newDefinition)
+
+		assertError(t, err, nil)
+		assertDefinition(t, dictionary, word, newDefinition)
+	})
+
+	t.Run("new word", func(t *testing.T) {
+		word := "test"
+		definition := "this is just a test"
+		dictionary := Dictionary{}
+
+		err := dictionary.Update(word, definition)
+		assertError(t, err, ErrWordDoesNotExist)
+	})
+}
+```
+
+:heavy_check_mark: dictionary.go
+```go
+func (d Dictionary) Update(word, definition string) error {
+	_, err := d.Search(word)
+
+	switch err {
+	case ErrNotFound:
+		return ErrWordDoesNotExist
+	case nil:
+		d[word] = definition
+	default:
+		return err
+	}
+	return nil
+}
+```
+
+## Add Delete Function
+마지막으로 등록된 단어를 삭제하는 기능을 만들어보자.
+
+:heavy_check_mark: dictionary_test.go 수정
+```go
+// in dictionary_test.go
+
+// Something ...
+
+// Add TestCode
+func TestDelete(t *testing.T) {
+	t.Run("existing word", func(t *testing.T) {
+		word := "test"
+		dictionary := Dictionary{word: "test definition"}
+
+		dictionary.Delete(word)
+		_, err := dictionary.Search(word)
+		if err != ErrNotFound {
+			t.Errorf("Expected %q to bi deleted", word)
+		}
+	})
+}
+```
+
+:heavy_check_mark: dictionary.go
+```go
+func (d Dictionary) Delete(word string) {
+	delete(d, word)
+}
+```
+
+Delete 메서드는 다른 메서드들과 다르게 아무런 반환값이 없다. 굳이 `Error`를 만들고 검사한 뒤 Delete 할 필요가 없다. 왜냐하면 다른 함수들과는 다르게 삭제 메서드는 `side effect`가 없기 때문이다.
