@@ -253,3 +253,143 @@ func main() {
 }
 ```
 이렇게 코드를 수정함으로써 `Sleep()`에 대한 의존성을 줄이고 `테스트 코드`는 4초를 기다릴 필요가 없어지게 되었다.
+
+## Still some problems
+위에서 작성한 테스트 코드는 문제가 전혀 없어 보이지만 조금의 문제는 남아있다. 이 부분을 해소해보자.
+
+먼저 테스트를 진행하기 위해 `Countdown` 함수를 조금 변경해보자.
+
+:heavy_check_mark: func Countdown 수정
+```go
+func Countdown(out io.Writer, sleeper Sleeper) {
+	for i := countdownStart; i > 0; i-- {
+		sleeper.Sleep()
+	}
+	for i := countdownStart; i > 0; i-- {
+		fmt.Fprint(out, i)
+	}
+
+	sleeper.Sleep()
+	fmt.Fprint(out, finalWord)
+}
+```
+구현이 잘못되었어도 테스트 코드는 실행이된다. 이를 해결하기 위해 `작업 순서`가 올바르게 진행되는지 확인하는 새로운 `테스트 코드`를 작성해야 한다.
+
+위 코드는 **서로 다른 두 가지의 종속성을 가지므로** 이를 하나의 종속성으로 합치는 코드로 변경해보자.
+
+:heavy_check_mark: countdown_test.go
+```go
+type CountdownOperationsSpy struct {
+	Calls []string
+}
+
+func (s *CountdownOperationsSpy) Sleep() {
+	s.Calls = append(s.Calls, sleep)
+}
+
+func (s *CountdownOperationsSpy) Write(p []byte) (n int, err error) {
+	s.Calls = append(s.Calls, write)
+	return
+}
+
+const write = "write"
+const sleep = "sleep"
+```
+`CountdownOperationsSpy`는 `io.Writer`와 `Sleeper`를 모두 구현하고, 모든 호출을 하나의 `slice`에 등록한다. 이 테스트에서는 `작업 순서`만을 고려하기 때문에 작업이 호출된 순서만 저장하면 된다.
+
+이제 `Sleep`과 `Print`의 순서가 제대로 동작하는지에 대한 추가 테스트 작성해보자.
+
+:heavy_check_mark: 추가테스트 작성
+```go
+func TestCountdown(t *testing.T) {
+
+	t.Run("prints 3 to Go!", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		Countdown(buffer, &CountdownOperationsSpy{})
+
+		got := buffer.String()
+		want := `3
+2
+1
+Go!`
+
+		if got != want {
+			t.Errorf("got %q want %q", got, want)
+		}
+	})
+
+	t.Run("sleep before every print", func(t *testing.T) {
+		spySleepPrinter := &CountdownOperationsSpy{}
+		Countdown(spySleepPrinter, spySleepPrinter)
+
+		want := []string{
+			sleep,
+			write,
+			sleep,
+			write,
+			sleep,
+			write,
+			sleep,
+			write,
+		}
+
+		if !reflect.DeepEqual(want, spySleepPrinter.Calls) {
+			t.Errorf("wanted calls %v got %v", want, spySleepPrinter.Calls)
+		}
+	})
+}
+```
+위와 같이 테스트를 수정함으로써 함수의 2가지 중요 기능 `(제대로 출력이 이루어 지는지, 순서에 맞게 호출이 되었는지)`에 대해 테스트 할 수 있다.
+
+## Sleeper Configuration
+메인 프로그램에서 슬리퍼의 `Sleep()` 시간을 조정할 수 있도록 변경해보자.
+
+:heavy_check_mark: ConfigurableSleeper struct
+```go
+// in main.go
+type ConfigurableSleeper struct {
+	duration time.Duration
+	sleep func(time.Duration)
+}
+```
+다음으로 `테스트 코드`에서 사용 될 `SpyTime`을 생성하고 `ConfigurableSleeper`를 테스트할 수 있는 테스트 코드를 작성해보자.
+
+:heavy_check_mark: SpyTime struct
+```go
+// in countdown_test.go
+
+type SpyTime struct {
+	durationSlept time.Duration
+}
+
+func (s *SpyTime) Sleep(duration time.Duration) {
+	s.durationSlept = duration
+}
+
+func TestConfigurableSleeper(t *testing.T) {
+	sleepTime := 5 * time.Second
+
+	spyTime := &SpyTime{}
+	sleeper := ConfigurableSleeper{sleepTime, spyTime.Sleep}
+	sleeper.Sleep()
+
+	if spyTime.durationSlept != sleepTime {
+		t.Errorf("should have slept for %v but slept for %v", sleepTime, spyTime.durationSlept)
+	}
+}
+```
+마지막으로 실제 응용프로그램에서 사용할 수 있도록 `ConfigurableSleeper`의 `Sleep` 메서드를 작성하고 `main` 함수를 수정해보자.
+
+:heavy_check_mark: main.go 수정
+```go
+// in main.go
+
+func (c *ConfigurableSleeper) Sleep() {
+	c.sleep(c.duration)
+}
+
+func main() {
+	sleeper := &ConfigurableSleeper{1 * tiem.Second, time.Sleep}
+	Countdown(os.Stdout, sleeper)
+}
+```
